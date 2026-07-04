@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { Box, Text } from "ink";
-import type { Message } from "./ai/index.js";
+import type { Message } from "./ai/types.js";
 import { renderMarkdown } from "./markdown.js";
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 type AppProps = {
   messages: Message[];
+  notifications: string[];
   streaming: string;
   loading: boolean;
 };
@@ -22,16 +23,20 @@ function Spinner() {
   return <Text color="cyan">{SPINNER_FRAMES[frame]}</Text>;
 }
 
-export default function App({ messages, streaming, loading }: AppProps) {
+export default function App({ messages, notifications, streaming, loading }: AppProps) {
   return (
     <Box flexDirection="column" padding={1}>
+      {notifications.map((note, i) => (
+        <Box key={`n-${i}`} marginBottom={1} paddingLeft={1}>
+          <Text dimColor color="green">
+            ✓ {note}
+          </Text>
+        </Box>
+      ))}
+
       {messages.map((msg, i) => (
-        <Box key={i} marginBottom={1} paddingLeft={1}>
-          {msg.role === "system" ? (
-            <Text dimColor color="green">
-              ✓ {msg.content}
-            </Text>
-          ) : msg.role === "user" ? (
+        <Box key={`m-${i}`} marginBottom={1} paddingLeft={1}>
+          {msg.role === "user" ? (
             <Text>
               <Text bold color="greenBright">
                 ❯{" "}

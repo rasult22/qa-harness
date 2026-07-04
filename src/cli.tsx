@@ -1,64 +1,43 @@
 import React from "react";
 import { render } from "ink";
 import * as readline from "node:readline";
-import { chat, type Message } from "./ai/index.js";
+import { createOpenAIProvider } from "./ai/openai.js";
+import { Session } from "./session.js";
+import { selectItem } from "./menu.js";
 import App from "./app.js";
 import { AVAILABLE_MODELS } from "./models.js";
 
-const messages: Message[] = [];
-let streaming = "";
-let loading = false;
-let currentModel: string = "gpt-4.1-nano";
-let selectingModel = false;
-let modelCursor = 0;
+const session = new Session({
+  provider: createOpenAIProvider(),
+});
+
+function getState() {
+  return session.getState();
+}
 
 const inkInstance = render(
-  <App messages={messages} streaming={streaming} loading={loading} />,
+  <App {...getState()} />,
 );
 
 function rerender() {
-  inkInstance.rerender(
-    <App messages={[...messages]} streaming={streaming} loading={loading} />,
-  );
+  inkInstance.rerender(<App {...getState()} />);
 }
 
-function printModelMenu() {
-  console.log(`\n\x1b[1m\x1b[36m  Select model \x1b[0m\x1b[2m(↑↓ Enter, Esc to cancel)\x1b[0m\n`);
-  AVAILABLE_MODELS.forEach((m, i) => {
-    const pointer = i === modelCursor ? "\x1b[32m❯\x1b[0m" : " ";
-    const color = m === currentModel ? "\x1b[33m" : i === modelCursor ? "\x1b[1m\x1b[37m" : "\x1b[90m";
-    const suffix = m === currentModel ? " \x1b[2m\x1b[33m(current)\x1b[0m" : "";
-    console.log(`  ${pointer} ${color}${m}\x1b[0m${suffix}`);
+async function enterModelSelect() {
+  rl.pause();
+
+  const chosen = await selectItem([...AVAILABLE_MODELS], {
+    label: (m) => {
+      const current = getState().model;
+      return m === current ? `${m} (current)` : m;
+    },
+    initial: AVAILABLE_MODELS.indexOf(getState().model as typeof AVAILABLE_MODELS[number]),
+    stdin: process.stdin,
+    stdout: process.stdout,
   });
-}
-
-function clearModelMenu() {
-  // lines: 1 empty + 1 header + 1 empty + N models = N + 3
-  const lines = AVAILABLE_MODELS.length + 3;
-  process.stdout.write(`\x1b[${lines}A\x1b[J`);
-}
-
-function enterModelSelect() {
-  selectingModel = true;
-  const idx = (AVAILABLE_MODELS as readonly string[]).indexOf(currentModel);
-  modelCursor = idx >= 0 ? idx : 0;
-  printModelMenu();
-
-  process.stdin.setRawMode(true);
-  process.stdin.resume();
-  process.stdin.on("data", onModelKeypress);
-}
-
-function exitModelSelect(chosen?: string) {
-  process.stdin.removeListener("data", onModelKeypress);
-  process.stdin.setRawMode(false);
-  selectingModel = false;
-
-  clearModelMenu();
 
   if (chosen) {
-    currentModel = chosen;
-    messages.push({ role: "system", content: `Model set to ${chosen}` });
+    session.setModel(chosen);
     rerender();
   }
 
@@ -66,78 +45,10 @@ function exitModelSelect(chosen?: string) {
   rl.prompt();
 }
 
-function onModelKeypress(data: Buffer) {
-  const s = data.toString();
-
-  // Escape
-  if (s === "\x1b" || s === "\x1b\x1b") {
-    exitModelSelect();
-    return;
-  }
-
-  // Enter
-  if (s === "\r" || s === "\n") {
-    exitModelSelect(AVAILABLE_MODELS[modelCursor]);
-    return;
-  }
-
-  // Ctrl+C
-  if (s === "\x03") {
-    exitModelSelect();
-    return;
-  }
-
-  // Up arrow
-  if (s === "\x1b[A") {
-    clearModelMenu();
-    modelCursor = modelCursor > 0 ? modelCursor - 1 : AVAILABLE_MODELS.length - 1;
-    printModelMenu();
-    return;
-  }
-
-  // Down arrow
-  if (s === "\x1b[B") {
-    clearModelMenu();
-    modelCursor = modelCursor < AVAILABLE_MODELS.length - 1 ? modelCursor + 1 : 0;
-    printModelMenu();
-    return;
-  }
-}
-
 async function sendMessage(userText: string) {
-  messages.push({ role: "user", content: userText });
-  loading = true;
-  streaming = "";
+  await session.send(userText, () => rerender());
   rerender();
-
-  try {
-    const chatMessages = messages.filter((m) => m.role !== "system");
-    const response = await chat({
-      model: currentModel,
-      systemPrompt:
-        "You are a QA assistant. Help users plan, write, and execute tests. Be concise.",
-      messages: chatMessages,
-    });
-
-    if (response.stream) {
-      let full = "";
-      for await (const delta of response.chunks) {
-        full += delta;
-        streaming = full;
-        rerender();
-      }
-      messages.push({ role: "assistant", content: full });
-    } else {
-      messages.push({ role: "assistant", content: response.content });
-    }
-  } catch (err: any) {
-    messages.push({ role: "assistant", content: `Error: ${err.message}` });
-  } finally {
-    streaming = "";
-    loading = false;
-    rerender();
-    rl.prompt();
-  }
+  rl.prompt();
 }
 
 function handleSlashCommand(line: string): boolean {
@@ -147,20 +58,12 @@ function handleSlashCommand(line: string): boolean {
 
   if (cmd === "/model") {
     if (!arg) {
-      rl.pause();
       enterModelSelect();
       return true;
     }
 
-    const models = AVAILABLE_MODELS as readonly string[];
-    if (models.includes(arg)) {
-      currentModel = arg;
-      messages.push({ role: "system", content: `Model set to ${arg}` });
-      rerender();
-    } else {
-      messages.push({ role: "system", content: `Unknown model "${arg}". Available: ${AVAILABLE_MODELS.join(", ")}` });
-      rerender();
-    }
+    session.setModel(arg);
+    rerender();
     rl.prompt();
     return true;
   }
@@ -208,8 +111,7 @@ rl.on("line", (line: string) => {
 
   if (trimmed.startsWith("/")) {
     if (handleSlashCommand(trimmed)) return;
-    messages.push({ role: "system", content: `Unknown command: ${trimmed}` });
-    rerender();
+    // Unknown command — just prompt again
     rl.prompt();
     return;
   }

@@ -9,7 +9,9 @@
   },
   "scripts": {
     "dev": "tsx src/cli.tsx",
-    "build": "tsc"
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [],
   "author": "",
@@ -23,5 +25,9 @@
     "react": "^19.2.7",
     "tsx": "^4.23.0",
     "typescript": "^6.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "vitest": "^4.1.9"
   }
 }
