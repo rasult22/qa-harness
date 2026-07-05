@@ -6,21 +6,31 @@ import { Session } from "./session.js";
 import { selectItem } from "./menu.js";
 import App from "./app.js";
 import { AVAILABLE_MODELS } from "./models.js";
+import { createFileTools } from "./tools.js";
+import type { TextMessage } from "./ai/types.js";
+
+const cwd = process.cwd();
 
 const session = new Session({
   provider: createOpenAIProvider(),
+  tools: createFileTools(cwd),
+  cwd,
 });
 
-function getState() {
-  return session.getState();
+function getAppProps() {
+  const state = session.getState();
+  const messages = state.messages.filter(
+    (m): m is TextMessage => m.role === "user" || (m.role === "assistant" && !("tool_calls" in m)),
+  );
+  return { ...state, messages };
 }
 
 const inkInstance = render(
-  <App {...getState()} />,
+  <App {...getAppProps()} />,
 );
 
 function rerender() {
-  inkInstance.rerender(<App {...getState()} />);
+  inkInstance.rerender(<App {...getAppProps()} />);
 }
 
 async function enterModelSelect() {
@@ -28,10 +38,10 @@ async function enterModelSelect() {
 
   const chosen = await selectItem([...AVAILABLE_MODELS], {
     label: (m) => {
-      const current = getState().model;
+      const current = getAppProps().model;
       return m === current ? `${m} (current)` : m;
     },
-    initial: AVAILABLE_MODELS.indexOf(getState().model as typeof AVAILABLE_MODELS[number]),
+    initial: AVAILABLE_MODELS.indexOf(getAppProps().model as typeof AVAILABLE_MODELS[number]),
     stdin: process.stdin,
     stdout: process.stdout,
   });

@@ -1,12 +1,12 @@
-import type { ChatResponse } from "./ai/types.js";
-import type { Message } from "./ai/types.js";
+import type { ChatResponse, TextMessage } from "./ai/types.js";
 
 export async function consumeStream(
   response: ChatResponse,
   onChunk: (accumulated: string) => void,
-): Promise<Message> {
+): Promise<TextMessage> {
   if (!response.stream) {
-    return { role: "assistant", content: response.content };
+    const content = "content" in response ? (response.content ?? "") : "";
+    return { role: "assistant", content };
   }
 
   let full = "";

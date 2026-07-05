@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { Box, Text } from "ink";
-import type { Message } from "./ai/types.js";
+import type { TextMessage } from "./ai/types.js";
 import { renderMarkdown } from "./markdown.js";
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 type AppProps = {
-  messages: Message[];
+  messages: TextMessage[];
   notifications: string[];
   streaming: string;
   loading: boolean;
