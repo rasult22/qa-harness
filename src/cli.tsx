@@ -7,7 +7,6 @@ import { selectItem } from "./menu.js";
 import App from "./app.js";
 import { AVAILABLE_MODELS } from "./models.js";
 import { createFileTools } from "./tools.js";
-import type { TextMessage } from "./ai/types.js";
 
 const cwd = process.cwd();
 
@@ -19,10 +18,7 @@ const session = new Session({
 
 function getAppProps() {
   const state = session.getState();
-  const messages = state.messages.filter(
-    (m): m is TextMessage => m.role === "user" || (m.role === "assistant" && !("tool_calls" in m)),
-  );
-  return { ...state, messages };
+  return { ...state, messages: state.messages };
 }
 
 const inkInstance = render(

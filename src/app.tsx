@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { Box, Text } from "ink";
-import type { TextMessage } from "./ai/types.js";
+import type { Message } from "./ai/types.js";
 import { renderMarkdown } from "./markdown.js";
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 type AppProps = {
-  messages: TextMessage[];
+  messages: Message[];
   notifications: string[];
   streaming: string;
   loading: boolean;
@@ -23,6 +23,11 @@ function Spinner() {
   return <Text color="cyan">{SPINNER_FRAMES[frame]}</Text>;
 }
 
+function truncate(text: string, max: number): string {
+  if (text.length <= max) return text;
+  return text.slice(0, max) + "...";
+}
+
 export default function App({ messages, notifications, streaming, loading }: AppProps) {
   return (
     <Box flexDirection="column" padding={1}>
@@ -36,20 +41,38 @@ export default function App({ messages, notifications, streaming, loading }: App
 
       {messages.map((msg, i) => (
         <Box key={`m-${i}`} marginBottom={1} paddingLeft={1}>
-          {msg.role === "user" ? (
+          {msg.role === "user" && (
             <Text>
               <Text bold color="greenBright">
                 ❯{" "}
               </Text>
               <Text color="white">{msg.content}</Text>
             </Text>
-          ) : (
+          )}
+
+          {msg.role === "assistant" && !("tool_calls" in msg) && (
             <Box flexDirection="column">
               <Text bold color="magentaBright">
                 ┃ AI
               </Text>
               <Text>┃ {renderMarkdown(msg.content)}</Text>
             </Box>
+          )}
+
+          {msg.role === "assistant" && "tool_calls" in msg && (
+            <Box flexDirection="column">
+              {msg.tool_calls.map((tc) => (
+                <Text key={tc.id} dimColor color="cyan">
+                  ⚙ {tc.function.name}({truncate(tc.function.arguments, 80)})
+                </Text>
+              ))}
+            </Box>
+          )}
+
+          {msg.role === "tool" && (
+            <Text dimColor color="gray">
+              ↳ {truncate(msg.content, 120)}
+            </Text>
           )}
         </Box>
       ))}
